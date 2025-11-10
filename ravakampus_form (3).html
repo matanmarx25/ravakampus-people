@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>מאגר היכרויות – רווקמפוס</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; background: #f2f8ff; margin: 0; padding: 20px; }
+  h1 { text-align: center; color: #004d9d; margin-bottom: 8px; }
+  .subtitle { text-align: center; color: #355; margin-bottom: 18px; line-height: 1.6; }
+  .container { max-width: 560px; margin: 14px auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .toolbar { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .badge { display: inline-block; padding: 6px 10px; border-radius: 999px; font-size: 12px; background: #e9f3ff; color: #004d9d; border: 1px solid #b6d7ff; white-space: nowrap; }
+  .form-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  label { font-weight: bold; margin-bottom: 6px; display: block; }
+  input, select, button { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 14px; }
+  button { background: #1677ff; color: white; border: none; cursor: pointer; }
+  button:hover { background: #0f5fd4; }
+  table { width: 100%; margin-top: 10px; border-collapse: collapse; }
+  th, td { padding: 10px; text-align: center; border-bottom: 1px solid #ddd; }
+  th { background: #f7fbff; }
+  .danger { background: #e53935; }
+  .danger:hover { background: #c62828; }
+</style>
+</head>
+<body>
+<h1>מאגר היכרויות – רווקמפוס</h1>
+<p class="subtitle">
+  זהו מאגר פנימי לאנשים שהיו באירוע <strong>רווקמפוס</strong> – כדי שיהיה קל לחזור ולפנות אחד לשני אחרי האירוע.
+  כל מי שממלא מופיע ברשימה. מספר הטלפון יוצג <em>או</em> לכולם <em>או</em> רק למנהלים – לפי הבחירה שלכם בטופס.
+</p>
+
+<div class="container">
+  <div class="toolbar">
+    <span id="statusBadge" class="badge">מצב: אורח</span>
+    <div style="display:flex; gap:8px;">
+      <button id="adminEnterBtn" onclick="adminLogin()">כניסת מנהל</button>
+      <button id="adminExitBtn" style="display:none;" onclick="exitAdmin()">יציאה ממצב מנהל</button>
+    </div>
+  </div>
+
+  <div class="form-grid">
+    <div>
+      <label>שם פרטי</label>
+      <input id="firstName" type="text" />
+    </div>
+    <div>
+      <label>שם משפחה</label>
+      <input id="lastName" type="text" />
+    </div>
+    <div>
+      <label>גיל</label>
+      <input id="age" type="number" min="16" />
+    </div>
+    <div>
+      <label>מין</label>
+      <select id="gender">
+        <option value="זכר">זכר</option>
+        <option value="נקבה">נקבה</option>
+        <option value="אחר">אחר</option>
+      </select>
+    </div>
+    <div>
+      <label>מספר טלפון</label>
+      <input id="phone" type="tel" placeholder="לדוגמה: 0521234567" />
+    </div>
+    <div>
+      <label>האם להציג את המספר לכולם?</label>
+      <select id="phoneVisibility">
+        <option value="public">כן</option>
+        <option value="private">רק למנהלים</option>
+      </select>
+    </div>
+    <div>
+      <button onclick="addUser()">שליחה</button>
+    </div>
+  </div>
+</div>
+
+<div id="tableContainer" class="container" style="display:none;">
+  <h2 style="text-align:center; margin-top:0;">רשימת המשתתפים</h2>
+  <table id="usersTable">
+    <thead id="tableHead"></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+let adminMode = false;
+const adminPin = "2411"; // לא מוצג למשתמשים
+
+function getUsers() { return JSON.parse(localStorage.getItem("ravakampusUsers") || "[]"); }
+function setUsers(arr) { localStorage.setItem("ravakampusUsers", JSON.stringify(arr)); }
+
+function updateStatusUI() {
+  const badge = document.getElementById('statusBadge');
+  const enterBtn = document.getElementById('adminEnterBtn');
+  const exitBtn = document.getElementById('adminExitBtn');
+  if (adminMode) {
+    badge.textContent = 'מצב: מנהל';
+    enterBtn.style.display = 'none';
+    exitBtn.style.display = 'inline-block';
+  } else {
+    badge.textContent = 'מצב: אורח';
+    enterBtn.style.display = 'inline-block';
+    exitBtn.style.display = 'none';
+  }
+}
+
+function loadUsers() {
+  const users = getUsers();
+  const thead = document.getElementById('tableHead');
+  const tbody = document.querySelector('#usersTable tbody');
+  tbody.innerHTML = '';
+
+  thead.innerHTML = `
+    <tr>
+      <th>שם</th>
+      <th>גיל</th>
+      <th>מין</th>
+      <th>טלפון</th>
+      ${adminMode ? '<th>פעולות</th>' : ''}
+    </tr>`;
+
+  users.forEach((u, i) => {
+    const tr = document.createElement('tr');
+    const phoneCell = (u.phoneVisibility === 'public' || adminMode) ? formatPhone(u.phone) : '*****';
+    tr.innerHTML = `
+      <td>${escapeHtml(u.firstName)} ${escapeHtml(u.lastName)}</td>
+      <td>${escapeHtml(u.age)}</td>
+      <td>${escapeHtml(u.gender)}</td>
+      <td>${phoneCell}</td>
+      ${adminMode ? `<td><button class="danger" onclick="deleteUser(${i})">מחיקה</button></td>` : ''}
+    `;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('tableContainer').style.display = 'block';
+  updateStatusUI();
+}
+
+function addUser() {
+  const firstName = document.getElementById('firstName').value.trim();
+  const lastName  = document.getElementById('lastName').value.trim();
+  const age       = document.getElementById('age').value.trim();
+  const gender    = document.getElementById('gender').value;
+  const phone     = document.getElementById('phone').value.trim();
+  const phoneVisibility = document.getElementById('phoneVisibility').value;
+
+  if (!firstName || !lastName || !age || !phone) { alert('נא למלא את כל השדות החיוניים'); return; }
+
+  const users = getUsers();
+  users.push({ firstName, lastName, age, gender, phone, phoneVisibility });
+  setUsers(users);
+  loadUsers();
+  alert('נרשמת בהצלחה!');
+  clearForm();
+}
+
+function deleteUser(index) {
+  if (!adminMode) return;
+  if (!confirm('למחוק את המשתתף/ת מהרשימה?')) return;
+  const users = getUsers();
+  users.splice(index, 1);
+  setUsers(users);
+  loadUsers();
+}
+
+function adminLogin() {
+  const pin = prompt('הזן קוד מנהל:');
+  if (pin === adminPin) { adminMode = true; loadUsers(); alert('מצב מנהל הופעל'); }
+  else if (pin !== null) { alert('סיסמה שגויה'); }
+}
+
+function exitAdmin() { adminMode = false; loadUsers(); }
+
+function clearForm() {
+  ['firstName','lastName','age','phone'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('gender').value = 'זכר';
+  document.getElementById('phoneVisibility').value = 'public';
+}
+
+function formatPhone(p) {
+  const onlyDigits = (p || '').replace(/\D/g, '');
+  if (onlyDigits.length === 10) { return `${onlyDigits.slice(0,3)}-${onlyDigits.slice(3,6)}-${onlyDigits.slice(6)}`; }
+  return p;
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[s]));
+}
+
+loadUsers();
+</script>
+</body>
+</html>
